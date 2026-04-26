@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const http = axios.create({ baseURL: '/api' })
+const apiBaseURL = import.meta.env.VITE_API_URL || '/api'
+const http = axios.create({ baseURL: apiBaseURL })
 const DEBUG_HTTP_KEY = 'sep_debug_http'
 
 const httpLogsAtivos = () =>

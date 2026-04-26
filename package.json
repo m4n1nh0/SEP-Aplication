@@ -13,6 +13,7 @@
     "db:setup": "npm run db:schema && npm run migrate && npm run db:seed",
     "db:reset": "docker exec mysql-local mysql -u root -proot123 -e \"DROP DATABASE IF EXISTS sep_db\" && npm run db:setup",
     "migrate": "npm run migrate --prefix server",
+    "migrate:prod": "npm run migrate:prod --prefix server",
     "migrate:status": "npm run migrate:status --prefix server",
     "migrate:create": "npm run migrate:create --prefix server --"
   },

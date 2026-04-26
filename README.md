@@ -31,7 +31,7 @@ Paciente se cadastra → Triagem clínica → Fila priorizada → Contato e agen
 
 O sistema opera como **monolito**: servidor Express serve a API e os arquivos do React compilado em uma única URL. Em desenvolvimento, `npm run dev` sobe os dois processos em paralelo (API :3001 + Vite :5173).
 
-Os guias operacionais por perfil ficam em [`docs/help`](./docs/help/README.md). Para regras de agenda, status, faltas e salas, consulte [`docs/help/agenda-status.md`](./docs/help/agenda-status.md).
+Os guias operacionais por perfil ficam em [`docs/help`](./docs/help/README.md). Para regras de agenda, status, faltas e salas, consulte [`docs/help/agenda-status.md`](./docs/help/agenda-status.md). Para Docker, Compose e Railway, consulte [`docs/deployment.md`](./docs/deployment.md).
 
 ---
 
@@ -48,7 +48,7 @@ Os guias operacionais por perfil ficam em [`docs/help`](./docs/help/README.md). 
 | Agenda | FullCalendar v6 (daygrid · timegrid · interaction) |
 | Segurança | Helmet · CORS restrito · Rate limiting por rota · Bloqueio por tentativas |
 | Deploy | Railway (produção) · Render + PlanetScale (demo gratuita) |
-| CI/CD | GitHub Actions (deploy automático no push para `main`) |
+| CI/CD | GitHub Actions manuais para Railway monolítico ou separado |
 
 ---
 
@@ -391,6 +391,8 @@ LOG_DIR=./logs
 
 ## Deploy em Produção — Railway
 
+> Atualizacao: o deploy atual esta documentado em [`docs/deployment.md`](./docs/deployment.md) e suporta dois modos prontos para escolha: monolito (`Dockerfile` + `railway-monolith.yml`) ou API/Web separados (`server/Dockerfile`, `client/Dockerfile` + `railway-split.yml`). A secao abaixo permanece como referencia historica do fluxo anterior.
+
 O projeto inclui `railway.json` configurado para deploy com `npm run dev`:
 
 ```json
@@ -516,7 +518,7 @@ Tela de logs disponível para o coordenador em **Segurança & Logs** → aba Log
 - [x] Gestão de documentos pelo paciente e pela recepção
 - [x] Portal do paciente com autoatendimento
 - [x] Logger estruturado com tela de logs no painel admin
-- [x] CI/CD via GitHub Actions para Railway e Render
+- [x] CI/CD via GitHub Actions para Railway monolitico ou separado
 - [ ] Consentimento LGPD explícito no cadastro (checkbox + política)
 - [ ] Relatório mensal exportável (PDF/CSV)
 - [ ] Criptografia de campos sensíveis em repouso (AES-256 application level)

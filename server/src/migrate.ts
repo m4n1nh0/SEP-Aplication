@@ -16,7 +16,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const MIGRATIONS_DIR = path.join(__dirname, '../database/migrations');
+function resolveMigrationsDir() {
+  const candidates = [
+    process.env.MIGRATIONS_DIR,
+    path.resolve(process.cwd(), 'database/migrations'),
+    path.resolve(process.cwd(), '../database/migrations'),
+    path.resolve(__dirname, '../../database/migrations'),
+    path.resolve(__dirname, '../database/migrations'),
+  ].filter(Boolean) as string[];
+
+  return candidates.find(dir => fs.existsSync(dir)) || candidates[0];
+}
+
+const MIGRATIONS_DIR = resolveMigrationsDir();
 
 async function getConnection() {
   return mysql.createConnection({

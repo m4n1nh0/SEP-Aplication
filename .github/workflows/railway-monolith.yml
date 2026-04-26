@@ -1,0 +1,55 @@
+name: Deploy Railway - Monolith
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Railway environment
+        required: true
+        default: production
+      service:
+        description: Railway service name for the monolith
+        required: true
+        default: sep-monolith
+      run_migrations:
+        description: Run database migrations on container start
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate build
+        run: |
+          npm ci --prefix server
+          npm ci --prefix client
+          npm run build --prefix client
+          npm run build --prefix server
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Configure runtime variables
+        run: |
+          railway variables set \
+            RUN_MIGRATIONS=${{ inputs.run_migrations }} \
+            SERVE_CLIENT=true \
+            --service "${{ inputs.service }}" \
+            --environment "${{ inputs.environment }}" \
+            --skip-deploys
+
+      - name: Deploy monolith
+        run: railway up --service "${{ inputs.service }}" --environment "${{ inputs.environment }}" --ci

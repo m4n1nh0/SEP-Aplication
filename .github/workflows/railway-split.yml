@@ -1,0 +1,112 @@
+name: Deploy Railway - Split API and Web
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Railway environment
+        required: true
+        default: production
+      target:
+        description: Which service to deploy
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - api
+          - web
+      api_service:
+        description: Railway API service name
+        required: true
+        default: sep-api
+      web_service:
+        description: Railway Web service name
+        required: true
+        default: sep-web
+      web_api_url:
+        description: Public API base URL for the web build, example https://api.example.com/api
+        required: false
+        default: ""
+      run_migrations:
+        description: Run database migrations on API container start
+        type: boolean
+        required: true
+        default: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate builds
+        run: |
+          npm ci --prefix server
+          npm ci --prefix client
+          npm run build --prefix server
+          npm run build --prefix client
+
+  deploy-api:
+    if: ${{ inputs.target == 'both' || inputs.target == 'api' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select API Railway config
+        run: cp railway.api.json railway.json
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Configure API runtime variables
+        run: |
+          railway variables set \
+            RUN_MIGRATIONS=${{ inputs.run_migrations }} \
+            SERVE_CLIENT=false \
+            --service "${{ inputs.api_service }}" \
+            --environment "${{ inputs.environment }}" \
+            --skip-deploys
+
+      - name: Deploy API
+        run: railway up --service "${{ inputs.api_service }}" --environment "${{ inputs.environment }}" --ci
+
+  deploy-web:
+    if: ${{ inputs.target == 'both' || inputs.target == 'web' }}
+    needs: validate
+    runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Web Railway config
+        run: cp railway.web.json railway.json
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Configure Web build variables
+        if: ${{ inputs.web_api_url != '' }}
+        run: |
+          railway variables set \
+            VITE_API_URL="${{ inputs.web_api_url }}" \
+            --service "${{ inputs.web_service }}" \
+            --environment "${{ inputs.environment }}" \
+            --skip-deploys
+
+      - name: Deploy Web
+        run: railway up --service "${{ inputs.web_service }}" --environment "${{ inputs.environment }}" --ci
