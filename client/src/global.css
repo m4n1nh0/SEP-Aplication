@@ -1,0 +1,75 @@
+/* ── Reset + variáveis globais ── */
+:root {
+  /* Admin — dark */
+  --adm-bg:      #0d1117;
+  --adm-surface: #161b22;
+  --adm-border:  #30363d;
+  --adm-text:    #e6edf3;
+  --adm-muted:   #8b949e;
+  --adm-accent:  #1d4ed8;
+
+  /* Portal paciente — light */
+  --por-bg:      #f0f7ff;
+  --por-surface: #ffffff;
+  --por-border:  #dbeafe;
+  --por-text:    #0f172a;
+  --por-muted:   #64748b;
+  --por-accent:  #1d4ed8;
+
+  /* Estagiário */
+  --est-accent:  #7c3aed;
+
+  /* Breakpoints como ref */
+  --bp-sm:  480px;
+  --bp-md:  768px;
+  --bp-lg:  1024px;
+
+  /* Spacing */
+  --sp-xs:  4px;
+  --sp-sm:  8px;
+  --sp-md:  16px;
+  --sp-lg:  24px;
+  --sp-xl:  32px;
+
+  /* Touch target mínimo */
+  --touch:  44px;
+
+  /* Font */
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Utilitários responsivos ── */
+@media (max-width: 768px) {
+  .hide-mobile { display: none !important; }
+}
+@media (min-width: 769px) {
+  .hide-desktop { display: none !important; }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ── Focus visível ── */
+:focus-visible { outline: 2px solid #1d4ed8; outline-offset: 2px; }
+
+/* ── Animações ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.fade-in { animation: fadeIn .25s ease both; }

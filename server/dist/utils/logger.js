@@ -1,0 +1,262 @@
+"use strict";
+/**
+ * SEP v3 — Logger central
+ * Sem dependências externas. Logs estruturados com resumo textual legível.
+ *
+ * Uso:
+ *   import logger from '../utils/logger'
+ *   logger.info('Paciente criado', { paciente_id: 42 })
+ *   logger.warn('Tentativa inválida', { ip, email })
+ *   logger.error('Falha no S3', err)
+ *   logger.http(req, res, ms)   // middleware HTTP
+ *   logger.audit(req, acao, detalhes)  // ações sensíveis (LGPD)
+ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.readLogs = void 0;
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
+// ── Configuração ──────────────────────────────────────────────
+const IS_PROD = process.env.NODE_ENV === 'production';
+const LOG_LEVEL = (process.env.LOG_LEVEL || 'info').toLowerCase();
+const LOG_DIR = process.env.LOG_DIR || path_1.default.join(process.cwd(), 'logs');
+const LOG_FILE = path_1.default.join(LOG_DIR, 'sep.log');
+const ERR_FILE = path_1.default.join(LOG_DIR, 'sep-error.log');
+const AUDIT_FILE = path_1.default.join(LOG_DIR, 'sep-audit.log');
+const MAX_BYTES = 10 * 1024 * 1024; // rotaciona ao atingir 10 MB
+// Cria a pasta de logs se não existir
+try {
+    fs_1.default.mkdirSync(LOG_DIR, { recursive: true });
+}
+catch { /* já existe */ }
+// ── Níveis ────────────────────────────────────────────────────
+const LEVELS = { debug: 0, http: 1, info: 2, warn: 3, error: 4 };
+const COLORS = {
+    debug: '\x1b[36m', // cyan
+    http: '\x1b[35m', // magenta
+    info: '\x1b[32m', // verde
+    warn: '\x1b[33m', // amarelo
+    error: '\x1b[31m', // vermelho
+    reset: '\x1b[0m',
+    dim: '\x1b[2m',
+    bold: '\x1b[1m',
+};
+// ── Helpers ───────────────────────────────────────────────────
+const ts = () => new Date().toISOString();
+const brt = () => {
+    const now = new Date();
+    return now.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit' });
+};
+const pad = (s, n) => s.padEnd(n).slice(0, n);
+const SENSITIVE_KEY = /(senha|password|token|authorization|secret|cpf|totp|email_token)/i;
+const redact = (value, key = '', depth = 0) => {
+    if (SENSITIVE_KEY.test(key))
+        return '[redigido]';
+    if (value === null || value === undefined)
+        return value;
+    if (depth > 3)
+        return '[objeto]';
+    if (Array.isArray(value))
+        return value.slice(0, 5).map(v => redact(v, key, depth + 1));
+    if (value instanceof Date)
+        return value.toISOString();
+    if (typeof value === 'object') {
+        return Object.entries(value).reduce((acc, [k, v]) => {
+            acc[k] = redact(v, k, depth + 1);
+            return acc;
+        }, {});
+    }
+    return value;
+};
+const formatValue = (value) => {
+    if (value === null || value === undefined || value === '')
+        return '-';
+    if (typeof value === 'string')
+        return value;
+    if (typeof value === 'number' || typeof value === 'boolean')
+        return String(value);
+    try {
+        return JSON.stringify(value);
+    }
+    catch {
+        return String(value);
+    }
+};
+const humanMeta = (meta) => {
+    if (!meta || !Object.keys(meta).length)
+        return '';
+    return Object.entries(meta)
+        .map(([k, v]) => `${k}=${formatValue(v)}`)
+        .join(' | ');
+};
+const textEntry = (message, meta, err) => {
+    const metaText = humanMeta(meta);
+    const errText = err ? `erro=${serializeError(err).message || 'erro desconhecido'}` : '';
+    return [message, metaText, errText].filter(Boolean).join(' | ');
+};
+// Rotação simples: renomeia quando ultrapassa MAX_BYTES
+const rotateIfNeeded = (file) => {
+    try {
+        const stat = fs_1.default.statSync(file);
+        if (stat.size > MAX_BYTES) {
+            const rotated = file.replace('.log', `-${Date.now()}.log`);
+            fs_1.default.renameSync(file, rotated);
+        }
+    }
+    catch { /* arquivo não existe ainda */ }
+};
+// Escreve no arquivo com rotação
+const writeFile = (file, line) => {
+    try {
+        rotateIfNeeded(file);
+        fs_1.default.appendFileSync(file, line + '\n', 'utf8');
+    }
+    catch (e) {
+        process.stderr.write(`[logger] Falha ao escrever em ${file}: ${e}\n`);
+    }
+};
+// Serializa erro para JSON
+const serializeError = (err) => {
+    if (!err)
+        return {};
+    if (err instanceof Error) {
+        return { message: err.message, stack: err.stack, name: err.name, ...err.code ? { code: err.code } : {} };
+    }
+    return { raw: String(err) };
+};
+// ── Core de log ───────────────────────────────────────────────
+const shouldLog = (level) => (LEVELS[level] ?? 0) >= (LEVELS[LOG_LEVEL] ?? 2);
+const emit = (level, message, meta, err) => {
+    if (!shouldLog(level))
+        return;
+    const safeMeta = meta ? redact(meta) : undefined;
+    const text = textEntry(message, safeMeta, err);
+    const entry = {
+        ts: ts(),
+        brt: brt(),
+        level: level.toUpperCase(),
+        message,
+        text,
+        ...(safeMeta ? { meta: safeMeta } : {}),
+        ...(err ? { error: serializeError(err) } : {}),
+    };
+    // ── Produção: JSON estruturado ────────────────────────────
+    if (IS_PROD) {
+        const line = JSON.stringify(entry);
+        writeFile(LOG_FILE, line);
+        if (level === 'error')
+            writeFile(ERR_FILE, line);
+        if (level === 'error' || level === 'warn')
+            process.stderr.write(line + '\n');
+        else
+            process.stdout.write(line + '\n');
+        return;
+    }
+    // ── Desenvolvimento: colorido e legível ───────────────────
+    const C = COLORS;
+    const col = C[level] || C.reset;
+    const lvl = pad(level.toUpperCase(), 5);
+    const time = `${C.dim}${entry.brt}${C.reset}`;
+    const msg = `${C.bold}${col}${lvl}${C.reset} ${time} ${message}`;
+    const metaStr = safeMeta && Object.keys(safeMeta).length
+        ? `\n       ${C.dim}${humanMeta(safeMeta)}${C.reset}`
+        : '';
+    const errStr = err
+        ? `\n       ${C.error}${serializeError(err).message}${C.reset}` +
+            (IS_PROD ? '' : `\n       ${C.dim}${serializeError(err).stack || ''}${C.reset}`)
+        : '';
+    const output = `${msg}${metaStr}${errStr}`;
+    if (level === 'error')
+        process.stderr.write(output + '\n');
+    else
+        process.stdout.write(output + '\n');
+    // Sempre persiste em arquivo mesmo em dev
+    writeFile(LOG_FILE, JSON.stringify(entry));
+    if (level === 'error')
+        writeFile(ERR_FILE, JSON.stringify(entry));
+};
+// ── Auditoria LGPD ────────────────────────────────────────────
+const audit = (req, acao, detalhes) => {
+    const entry = {
+        ts: ts(),
+        brt: brt(),
+        level: 'AUDIT',
+        acao,
+        usuario_id: req.user?.id || null,
+        usuario_nome: req.user?.nome || null,
+        perfil: req.user?.perfil || null,
+        ip: req.clientIp || null,
+        metodo: req.method || null,
+        rota: req.originalUrl || null,
+        ...redact(detalhes || {}),
+    };
+    const text = `${acao} | usuario=${entry.usuario_nome || '-'} | perfil=${entry.perfil || '-'} | rota=${entry.rota || '-'}${detalhes ? ` | ${humanMeta(redact(detalhes))}` : ''}`;
+    entry.text = text;
+    writeFile(AUDIT_FILE, JSON.stringify(entry));
+    if (!IS_PROD) {
+        process.stdout.write(`${COLORS.bold}${COLORS.http}AUDIT${COLORS.reset} ` +
+            `${COLORS.dim}${entry.brt}${COLORS.reset} ` +
+            `${text}\n`);
+    }
+};
+// ── Middleware HTTP ───────────────────────────────────────────
+// Usar em: app.use(logger.middleware)
+const middleware = (req, res, next) => {
+    const started = Date.now();
+    res.on('finish', () => {
+        const ms = Date.now() - started;
+        const status = res.statusCode;
+        const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'http';
+        emit(level, `${req.method} ${req.originalUrl} -> ${status} em ${ms}ms`, {
+            status,
+            ms,
+            ip: req.clientIp || req.ip,
+            usuario: req.user?.id || null,
+            perfil: req.user?.perfil || null,
+        });
+    });
+    next();
+};
+// ── Leitura de logs para a tela de admin ─────────────────────
+const readLogs = (arquivo, limite = 200) => {
+    const file = arquivo === 'error' ? ERR_FILE
+        : arquivo === 'audit' ? AUDIT_FILE
+            : LOG_FILE;
+    try {
+        const lines = fs_1.default.readFileSync(file, 'utf8')
+            .split('\n')
+            .filter(Boolean)
+            .slice(-limite)
+            .reverse()
+            .map(l => {
+            try {
+                const parsed = JSON.parse(l);
+                return { ...parsed, text: parsed.text || textEntry(parsed.message || parsed.acao || 'Log', parsed.meta, parsed.error) };
+            }
+            catch {
+                return { level: 'TEXT', message: l, text: l };
+            }
+        });
+        return lines;
+    }
+    catch {
+        return [];
+    }
+};
+exports.readLogs = readLogs;
+// ── Exportação ────────────────────────────────────────────────
+const logger = {
+    debug: (msg, meta) => emit('debug', msg, meta),
+    http: (msg, meta) => emit('http', msg, meta),
+    info: (msg, meta) => emit('info', msg, meta),
+    warn: (msg, meta) => emit('warn', msg, meta),
+    error: (msg, err, meta) => emit('error', msg, meta, err),
+    audit,
+    middleware,
+    readLogs: exports.readLogs,
+};
+exports.default = logger;
