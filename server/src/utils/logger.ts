@@ -112,7 +112,16 @@ const writeFile = (file: string, line: string) => {
 const serializeError = (err: any): Record<string, any> => {
   if (!err) return {}
   if (err instanceof Error) {
-    return { message: err.message, stack: err.stack, name: err.name, ...(err as any).code ? { code: (err as any).code } : {} }
+    const code = (err as any).code
+    const nested = Array.isArray((err as any).errors)
+      ? { errors: (err as any).errors.slice(0, 3).map((e: any) => ({
+          message: e?.message || e?.code || e?.name || String(e),
+          code: e?.code,
+          address: e?.address,
+          port: e?.port,
+        })) }
+      : {}
+    return { message: err.message || code || err.name, stack: err.stack, name: err.name, ...(code ? { code } : {}), ...nested }
   }
   return { raw: String(err) }
 }

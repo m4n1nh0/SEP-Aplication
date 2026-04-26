@@ -1,14 +1,11 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import logger from '../utils/logger';
+import { mysqlConfigSummary, mysqlConnectionConfig } from './mysqlConfig';
 dotenv.config();
 
 const pool = mysql.createPool({
-  host:               process.env.DB_HOST     || 'localhost',
-  port:               Number(process.env.DB_PORT) || 3306,
-  user:               process.env.DB_USER     || 'root',
-  password:           process.env.DB_PASSWORD || '',
-  database:           process.env.DB_NAME     || 'sep_db',
+  ...mysqlConnectionConfig(),
   waitForConnections: true,
   connectionLimit:    15,
   timezone:           '-03:00',
@@ -26,8 +23,7 @@ pool.getConnection()
                NOW() AS mysql_now
       `);
       logger.info('Banco conectado; datas serao lidas como texto local', {
-        host: process.env.DB_HOST || 'localhost',
-        database: process.env.DB_NAME || 'sep_db',
+        ...mysqlConfigSummary(),
         timezone_configurada: '-03:00',
         date_strings: true,
         mysql: tzRows?.[0] || null,

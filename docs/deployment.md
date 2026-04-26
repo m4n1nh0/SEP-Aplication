@@ -79,6 +79,16 @@ LOG_DIR=/app/logs
 UPLOAD_DIR=/app/uploads
 ```
 
+No Railway com o template oficial de MySQL, a forma mais simples e criar no servico da aplicacao:
+
+```env
+MYSQL_URL=${{ MySQL.MYSQL_URL }}
+```
+
+O backend tambem aceita as variaveis nativas do Railway (`MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD`, `MYSQLDATABASE`) ou as variaveis tradicionais (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`).
+
+Nao coloque a URL completa dentro de `DB_HOST`. Se quiser usar a URL completa, use `MYSQL_URL`, `DATABASE_URL` ou `DB_URL`.
+
 No monolito:
 
 ```env
@@ -109,6 +119,8 @@ VITE_API_URL=https://sua-api.up.railway.app/api
 2. Adicione um servico MySQL ou configure um MySQL externo.
 3. Crie um servico para a aplicacao, por exemplo `sep-monolith`.
 4. Configure as variaveis de banco, `JWT_SECRET`, `CLIENT_URL`, `APP_URL` e `RUN_MIGRATIONS`.
+   - Para Railway MySQL: `MYSQL_URL=${{ MySQL.MYSQL_URL }}`.
+   - Alternativa: referencie `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`, `MYSQLPASSWORD` e `MYSQLDATABASE`.
 5. No GitHub, cadastre o secret `RAILWAY_TOKEN`.
 6. Execute o workflow `Deploy Railway - Monolith`.
 

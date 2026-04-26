@@ -13,6 +13,7 @@ import mysql from 'mysql2/promise';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { mysqlConfigSummary, mysqlConnectionConfig } from './db/mysqlConfig';
 
 dotenv.config();
 
@@ -32,11 +33,7 @@ const MIGRATIONS_DIR = resolveMigrationsDir();
 
 async function getConnection() {
   return mysql.createConnection({
-    host:     process.env.DB_HOST     || 'localhost',
-    port:     Number(process.env.DB_PORT) || 3306,
-    user:     process.env.DB_USER     || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME     || 'sep_db',
+    ...mysqlConnectionConfig(),
     charset:  'utf8mb4',
     multipleStatements: true,  // necessário para executar múltiplos statements por arquivo
   });
@@ -95,6 +92,7 @@ async function aplicar(conn: mysql.Connection, arquivo: string) {
 async function migrate() {
   const conn = await getConnection();
   try {
+    console.log('Conectando no MySQL:', mysqlConfigSummary());
     await ensureMigrationsTable(conn);
     const aplicadas = await getAplicadas(conn);
     const arquivos  = getMigrationFiles();
