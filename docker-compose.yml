@@ -34,6 +34,7 @@ services:
       CLIENT_URL: http://localhost:3001
       APP_URL: http://localhost:3001
       RUN_MIGRATIONS: "true"
+      SEEDS_RESET: "false"
       LOG_LEVEL: info
       LOG_DIR: /app/logs
       UPLOAD_DIR: /app/uploads
@@ -64,6 +65,7 @@ services:
       CLIENT_URL: http://localhost:5173
       APP_URL: http://localhost:3001
       RUN_MIGRATIONS: "true"
+      SEEDS_RESET: "false"
       LOG_LEVEL: info
       LOG_DIR: /app/logs
       UPLOAD_DIR: /app/uploads

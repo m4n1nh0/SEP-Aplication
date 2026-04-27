@@ -79,6 +79,7 @@ CLIENT_URL=
 APP_URL=
 RUN_MIGRATIONS=true
 RUN_SEEDS=false
+SEEDS_RESET=false
 SEEDS_DUPLICATE_POLICY=skip
 LOG_LEVEL=info
 LOG_DIR=/app/logs
@@ -193,7 +194,9 @@ Como o Railway procura `railway.json` por padrao, os servicos separados precisam
 - Migrations sao seguras para producao: cada arquivo `.sql` roda apenas uma vez.
 - Seeds sao opt-in: so rodam quando `RUN_SEEDS=true`.
 - O runner de seeds cria `_seeds` antes de consultar a tabela, evitando erro quando o banco ainda nao tem esse controle.
-- Se o banco ja tiver dados do seed, mas `_seeds` nao tiver o marcador, erro `Duplicate entry` e tratado como seed ja aplicado e o arquivo e marcado em `_seeds`.
+- Se o banco ja tiver dados parciais do seed, use `RUN_SEEDS=true` com `SEEDS_RESET=true` uma unica vez para limpar os dados demo e reaplicar `seeds.sql` completo.
+- `SEEDS_RESET=true` limpa dados de demonstracao das tabelas da aplicacao, zera `_seeds` e preserva `_migrations`.
+- Se o banco ja tiver dados do seed, mas `_seeds` nao tiver o marcador, erro `Duplicate entry` e tratado como seed ignorado para o container nao cair. Ele nao marca o arquivo como aplicado.
 - Para fazer o container falhar em caso de duplicidade, configure `SEEDS_DUPLICATE_POLICY=fail`.
 - Para reaplicar um seed, prefira criar um novo arquivo `.sql`; remover manualmente uma linha de `_seeds` deve ser feito com cuidado.
 

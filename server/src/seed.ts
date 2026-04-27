@@ -18,6 +18,30 @@ type SeedFile = {
 
 type ApplyResult = "applied" | "skipped";
 
+const RESET_TABLES = [
+  "recuperacao_senha",
+  "sessoes",
+  "logs_seguranca",
+  "audit_prontuarios",
+  "documentos",
+  "paciente_documentos",
+  "altas_clinicas",
+  "prontuarios",
+  "notificacoes",
+  "historico_status",
+  "agendamentos",
+  "vinculos_estagiario_paciente",
+  "vinculos_supervisor_estagiario",
+  "estagiario_slots",
+  "estagiarios",
+  "pacientes",
+  "usuarios",
+  "sep_config",
+  "_seeds",
+] as const;
+
+const NO_AUTO_INCREMENT = new Set(["sep_config"]);
+
 function listSqlFiles(dir: string): SeedFile[] {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return [];
 
@@ -135,6 +159,12 @@ function failOnDuplicate(): boolean {
   return String(process.env.SEEDS_DUPLICATE_POLICY || "").toLowerCase() === "fail";
 }
 
+function shouldResetSeeds(): boolean {
+  return ["true", "1", "yes", "sim"].includes(
+    String(process.env.SEEDS_RESET || process.env.RESET_SEEDS || "").toLowerCase()
+  );
+}
+
 async function selectAplicados(conn: mysql.Connection): Promise<Set<string>> {
   const [rows] = await conn.execute("SELECT arquivo FROM `_seeds` ORDER BY arquivo");
 
@@ -154,6 +184,35 @@ async function getAplicados(conn: mysql.Connection): Promise<Set<string>> {
 
 async function markApplied(conn: mysql.Connection, seedFile: SeedFile): Promise<void> {
   await conn.execute("INSERT IGNORE INTO `_seeds` (arquivo) VALUES (?)", [seedFile.arquivo]);
+}
+
+async function tableExists(conn: mysql.Connection, table: string): Promise<boolean> {
+  const [rows] = await conn.execute(
+    "SELECT COUNT(*) AS total FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?",
+    [table]
+  );
+
+  return Number((rows as Array<{ total: number }>)[0]?.total || 0) > 0;
+}
+
+async function resetSeedData(conn: mysql.Connection): Promise<void> {
+  console.log("SEEDS_RESET=true ativo. Limpando dados de demonstracao antes dos seeds.");
+  await conn.query("SET FOREIGN_KEY_CHECKS=0");
+
+  try {
+    for (const table of RESET_TABLES) {
+      if (!(await tableExists(conn, table))) continue;
+
+      console.log(`  Limpando tabela: ${table}`);
+      await conn.query(`DELETE FROM \`${table}\``);
+
+      if (!NO_AUTO_INCREMENT.has(table)) {
+        await conn.query(`ALTER TABLE \`${table}\` AUTO_INCREMENT = 1`);
+      }
+    }
+  } finally {
+    await conn.query("SET FOREIGN_KEY_CHECKS=1");
+  }
 }
 
 async function aplicar(conn: mysql.Connection, seedFile: SeedFile): Promise<ApplyResult> {
@@ -187,9 +246,9 @@ async function aplicar(conn: mysql.Connection, seedFile: SeedFile): Promise<Appl
 
     if (duplicateSeedData(err) && !failOnDuplicate()) {
       console.warn(
-        `  Seed ${seedFile.arquivo} encontrou dado duplicado e sera tratado como ja aplicado: ${message}`
+        `  Seed ${seedFile.arquivo} encontrou dado duplicado: ${message}`
       );
-      await markApplied(conn, seedFile);
+      console.warn("  Use SEEDS_RESET=true para limpar os dados antes de reaplicar o seed completo.");
       return "skipped";
     }
 
@@ -203,6 +262,12 @@ async function seed(): Promise<void> {
 
   try {
     await ensureSeedsTable(conn);
+
+    if (shouldResetSeeds()) {
+      await resetSeedData(conn);
+      await ensureSeedsTable(conn);
+    }
+
     const aplicados = await getAplicados(conn);
     const pendentes = SEED_FILES.filter((file) => !aplicados.has(file.arquivo));
 
