@@ -12,6 +12,7 @@ server/dist
 npm-debug.log*
 server/dist/index.js
 server/dist/migrate.js
+server/dist/seed.js
 server/dist/controllers/admin.js
 server/dist/controllers/altas.js
 server/dist/controllers/auth.js
