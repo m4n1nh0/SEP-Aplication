@@ -16,6 +16,8 @@ type SeedFile = {
   filePath: string;
 };
 
+type ApplyResult = "applied" | "skipped";
+
 function listSqlFiles(dir: string): SeedFile[] {
   if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return [];
 
@@ -104,6 +106,14 @@ function missingSeedsTable(err: unknown): boolean {
   );
 }
 
+function duplicateSeedData(err: unknown): boolean {
+  return (err as any)?.code === "ER_DUP_ENTRY" || (err as any)?.errno === 1062;
+}
+
+function failOnDuplicate(): boolean {
+  return String(process.env.SEEDS_DUPLICATE_POLICY || "").toLowerCase() === "fail";
+}
+
 async function selectAplicados(conn: mysql.Connection): Promise<Set<string>> {
   const [rows] = await conn.execute("SELECT arquivo FROM `_seeds` ORDER BY arquivo");
 
@@ -121,23 +131,47 @@ async function getAplicados(conn: mysql.Connection): Promise<Set<string>> {
   }
 }
 
-async function aplicar(conn: mysql.Connection, seedFile: SeedFile): Promise<void> {
+async function markApplied(conn: mysql.Connection, seedFile: SeedFile): Promise<void> {
+  await conn.execute("INSERT IGNORE INTO `_seeds` (arquivo) VALUES (?)", [seedFile.arquivo]);
+}
+
+async function aplicar(conn: mysql.Connection, seedFile: SeedFile): Promise<ApplyResult> {
   const sql = fs.readFileSync(seedFile.filePath, "utf8").trim();
 
   if (!sql) {
     console.log(`  Ignorando seed vazio: ${seedFile.arquivo}`);
-    return;
+    await markApplied(conn, seedFile);
+    return "skipped";
   }
 
   console.log(`  Aplicando seed: ${seedFile.arquivo}`);
 
   try {
+    await conn.beginTransaction();
     await conn.query("SET NAMES utf8mb4");
     await conn.query(sql);
-    await conn.execute("INSERT INTO `_seeds` (arquivo) VALUES (?)", [seedFile.arquivo]);
+    await markApplied(conn, seedFile);
+    await conn.commit();
     console.log(`  OK: ${seedFile.arquivo}`);
+    return "applied";
   } catch (err) {
+    try {
+      await conn.rollback();
+    } catch (rollbackErr) {
+      const rollbackMessage = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+      console.warn(`  Aviso: rollback do seed falhou: ${rollbackMessage}`);
+    }
+
     const message = err instanceof Error ? err.message : String(err);
+
+    if (duplicateSeedData(err) && !failOnDuplicate()) {
+      console.warn(
+        `  Seed ${seedFile.arquivo} encontrou dado duplicado e sera tratado como ja aplicado: ${message}`
+      );
+      await markApplied(conn, seedFile);
+      return "skipped";
+    }
+
     console.error(`  ERRO em ${seedFile.arquivo}: ${message}`);
     throw err;
   }
@@ -165,11 +199,16 @@ async function seed(): Promise<void> {
 
     console.log(`${pendentes.length} seed(s) para aplicar:`);
 
+    let applied = 0;
+    let skipped = 0;
+
     for (const file of pendentes) {
-      await aplicar(conn, file);
+      const result = await aplicar(conn, file);
+      if (result === "applied") applied += 1;
+      if (result === "skipped") skipped += 1;
     }
 
-    console.log(`${pendentes.length} seed(s) aplicado(s) com sucesso.`);
+    console.log(`${applied} seed(s) aplicado(s). ${skipped} seed(s) ignorado(s).`);
   } finally {
     await conn.end();
   }
