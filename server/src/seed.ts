@@ -1,127 +1,144 @@
-"use strict";
-
 /**
- * SEP — Seed Runner
- * Executa apenas seeds que ainda não foram aplicadas.
- * Nunca re-executa automaticamente o mesmo arquivo de seed.
- *
- * Uso:
- *   npm run db:seed              -> executa local via ts-node
- *   npm run db:seed:prod         -> executa produção via node dist/seed.js
- *   npm run db:seed:status       -> lista status local
- *   npm run db:seed:status:prod  -> lista status produção
+ * SEP - Seed Runner
+ * Runs only pending seed files and records each applied file in `_seeds`.
  */
 
 import mysql from "mysql2/promise";
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
+import { mysqlConfigSummary, mysqlConnectionConfig } from "./db/mysqlConfig";
 
 dotenv.config();
 
-function resolveSeedsDir(): string {
-  const candidates = [
-    path.join(process.cwd(), "database/seeds"),
-    path.join(process.cwd(), "database"),
-    path.join(process.cwd(), "server/database/seeds"),
-    path.join(__dirname, "../database/seeds"),
-    path.join(__dirname, "../database"),
-  ];
+type SeedFile = {
+  arquivo: string;
+  filePath: string;
+};
 
-  for (const dir of candidates) {
-    if (!fs.existsSync(dir)) {
-      continue;
-    }
+function listSqlFiles(dir: string): SeedFile[] {
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) return [];
 
-    const files = fs.readdirSync(dir).filter((file) => file.endsWith(".sql"));
-
-    if (files.length > 0) {
-      return dir;
-    }
-  }
-
-  return path.join(process.cwd(), "database");
+  return fs
+    .readdirSync(dir)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .map((file) => ({ arquivo: file, filePath: path.join(dir, file) }));
 }
 
-const SEEDS_DIR = resolveSeedsDir();
+function singleSeedFile(filePath?: string): SeedFile[] {
+  if (!filePath) return [];
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return [];
+
+  return [{ arquivo: path.basename(filePath), filePath }];
+}
+
+function resolveSeedFiles(): SeedFile[] {
+  const explicitFile = singleSeedFile(process.env.SEEDS_FILE);
+  if (explicitFile.length > 0) return explicitFile;
+
+  const explicitDir = process.env.SEEDS_DIR ? listSqlFiles(process.env.SEEDS_DIR) : [];
+  if (explicitDir.length > 0) return explicitDir;
+
+  const seedDirs = [
+    path.resolve(process.cwd(), "database/seeds"),
+    path.resolve(process.cwd(), "server/database/seeds"),
+    path.resolve(__dirname, "../../database/seeds"),
+    path.resolve(__dirname, "../database/seeds"),
+  ];
+
+  for (const dir of seedDirs) {
+    const files = listSqlFiles(dir);
+    if (files.length > 0) return files;
+  }
+
+  const seedFiles = [
+    path.resolve(process.cwd(), "database/seeds.sql"),
+    path.resolve(process.cwd(), "server/database/seeds.sql"),
+    path.resolve(__dirname, "../../database/seeds.sql"),
+    path.resolve(__dirname, "../database/seeds.sql"),
+  ];
+
+  for (const file of seedFiles) {
+    const files = singleSeedFile(file);
+    if (files.length > 0) return files;
+  }
+
+  return [];
+}
+
+const SEED_FILES = resolveSeedFiles();
+
+function seedLocation(): string {
+  const dirs = Array.from(new Set(SEED_FILES.map((file) => path.dirname(file.filePath))));
+  if (dirs.length === 0) return "nenhum seed encontrado";
+
+  return dirs.join(", ");
+}
 
 async function getConnection(): Promise<mysql.Connection> {
-  const host = process.env.DB_HOST || process.env.MYSQLHOST || "localhost";
-  const port = Number(process.env.DB_PORT || process.env.MYSQLPORT || 3306);
-  const user = process.env.DB_USER || process.env.MYSQLUSER || "root";
-  const password = process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || "";
-  const database = process.env.DB_NAME || process.env.MYSQLDATABASE || "railway";
-
-  console.log("Conectando no MySQL:", {
-    source: process.env.DB_HOST ? "db_vars" : "mysql_vars",
-    host,
-    port,
-    database,
-    user,
-    ssl: false,
-  });
+  console.log("Conectando no MySQL:", mysqlConfigSummary());
 
   return mysql.createConnection({
-    host,
-    port,
-    user,
-    password,
-    database,
+    ...mysqlConnectionConfig(),
     charset: "utf8mb4",
     multipleStatements: true,
   });
 }
 
 async function ensureSeedsTable(conn: mysql.Connection): Promise<void> {
+  await conn.query("SET NAMES utf8mb4");
   await conn.execute(`
-    CREATE TABLE IF NOT EXISTS _seeds (
-      id          INT AUTO_INCREMENT PRIMARY KEY,
-      arquivo     VARCHAR(255) NOT NULL UNIQUE,
+    CREATE TABLE IF NOT EXISTS \`_seeds\` (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      arquivo VARCHAR(255) NOT NULL UNIQUE,
       aplicado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `);
 }
 
-async function getAplicados(conn: mysql.Connection): Promise<Set<string>> {
-  const [rows] = await conn.execute("SELECT arquivo FROM _seeds ORDER BY arquivo");
-
-  return new Set(
-    (rows as Array<{ arquivo: string }>).map((row) => row.arquivo)
+function missingSeedsTable(err: unknown): boolean {
+  return (
+    (err as any)?.code === "ER_NO_SUCH_TABLE" &&
+    String((err as any)?.message || "").includes("_seeds")
   );
 }
 
-function getSeedFiles(): string[] {
-  if (!fs.existsSync(SEEDS_DIR)) {
-    fs.mkdirSync(SEEDS_DIR, { recursive: true });
-    return [];
-  }
+async function selectAplicados(conn: mysql.Connection): Promise<Set<string>> {
+  const [rows] = await conn.execute("SELECT arquivo FROM `_seeds` ORDER BY arquivo");
 
-  return fs
-    .readdirSync(SEEDS_DIR)
-    .filter((file) => file.endsWith(".sql"))
-    .sort();
+  return new Set((rows as Array<{ arquivo: string }>).map((row) => row.arquivo));
 }
 
-async function aplicar(conn: mysql.Connection, arquivo: string): Promise<void> {
-  const filePath = path.join(SEEDS_DIR, arquivo);
-  const sql = fs.readFileSync(filePath, "utf8").trim();
+async function getAplicados(conn: mysql.Connection): Promise<Set<string>> {
+  try {
+    return await selectAplicados(conn);
+  } catch (err) {
+    if (!missingSeedsTable(err)) throw err;
+
+    await ensureSeedsTable(conn);
+    return selectAplicados(conn);
+  }
+}
+
+async function aplicar(conn: mysql.Connection, seedFile: SeedFile): Promise<void> {
+  const sql = fs.readFileSync(seedFile.filePath, "utf8").trim();
 
   if (!sql) {
-    console.log(`  ⚠️ Ignorando seed vazio: ${arquivo}`);
+    console.log(`  Ignorando seed vazio: ${seedFile.arquivo}`);
     return;
   }
 
-  console.log(`  → Aplicando seed: ${arquivo}`);
+  console.log(`  Aplicando seed: ${seedFile.arquivo}`);
 
   try {
-    await conn.execute("SET NAMES utf8mb4");
+    await conn.query("SET NAMES utf8mb4");
     await conn.query(sql);
-    await conn.execute("INSERT INTO _seeds (arquivo) VALUES (?)", [arquivo]);
-
-    console.log(`  ✅ OK: ${arquivo}`);
-  } catch (err: unknown) {
+    await conn.execute("INSERT INTO `_seeds` (arquivo) VALUES (?)", [seedFile.arquivo]);
+    console.log(`  OK: ${seedFile.arquivo}`);
+  } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`  ❌ ERRO em ${arquivo}: ${message}`);
+    console.error(`  ERRO em ${seedFile.arquivo}: ${message}`);
     throw err;
   }
 }
@@ -131,25 +148,28 @@ async function seed(): Promise<void> {
 
   try {
     await ensureSeedsTable(conn);
-
     const aplicados = await getAplicados(conn);
-    const arquivos = getSeedFiles();
-    const pendentes = arquivos.filter((file) => !aplicados.has(file));
+    const pendentes = SEED_FILES.filter((file) => !aplicados.has(file.arquivo));
 
-    console.log(`📁 Pasta de seeds: ${SEEDS_DIR}`);
+    console.log(`Seeds: ${seedLocation()}`);
 
-    if (pendentes.length === 0) {
-      console.log("✅ Banco atualizado — nenhum seed pendente.");
+    if (SEED_FILES.length === 0) {
+      console.log("Nenhum arquivo de seed encontrado.");
       return;
     }
 
-    console.log(`🔄 ${pendentes.length} seed(s) para aplicar:`);
-
-    for (const arquivo of pendentes) {
-      await aplicar(conn, arquivo);
+    if (pendentes.length === 0) {
+      console.log("Banco atualizado - nenhum seed pendente.");
+      return;
     }
 
-    console.log(`✅ ${pendentes.length} seed(s) aplicado(s) com sucesso.`);
+    console.log(`${pendentes.length} seed(s) para aplicar:`);
+
+    for (const file of pendentes) {
+      await aplicar(conn, file);
+    }
+
+    console.log(`${pendentes.length} seed(s) aplicado(s) com sucesso.`);
   } finally {
     await conn.end();
   }
@@ -160,27 +180,26 @@ async function status(): Promise<void> {
 
   try {
     await ensureSeedsTable(conn);
-
     const aplicados = await getAplicados(conn);
-    const arquivos = getSeedFiles();
 
-    console.log(`📁 Pasta de seeds: ${SEEDS_DIR}`);
-    console.log("📋 Status dos seeds:");
+    console.log(`Seeds: ${seedLocation()}`);
+    console.log("Status dos seeds:");
 
-    if (arquivos.length === 0) {
+    if (SEED_FILES.length === 0) {
       console.log("  Nenhum arquivo de seed encontrado.");
       return;
     }
 
-    for (const arquivo of arquivos) {
-      const ok = aplicados.has(arquivo);
-      console.log(`  ${ok ? "✅" : "⏳"} ${arquivo}${ok ? "" : " (pendente)"}`);
+    for (const file of SEED_FILES) {
+      const ok = aplicados.has(file.arquivo);
+      console.log(`  ${ok ? "OK" : "PENDENTE"} ${file.arquivo}`);
     }
 
-    const pendentes = arquivos.filter((file) => !aplicados.has(file));
+    const aplicadosVisiveis = SEED_FILES.filter((file) => aplicados.has(file.arquivo)).length;
+    const pendentes = SEED_FILES.length - aplicadosVisiveis;
 
     console.log(
-      `Total: ${arquivos.length} | Aplicados: ${aplicados.size} | Pendentes: ${pendentes.length}`
+      `Total: ${SEED_FILES.length} | Aplicados: ${aplicadosVisiveis} | Pendentes: ${pendentes}`
     );
   } finally {
     await conn.end();

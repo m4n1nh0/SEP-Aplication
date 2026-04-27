@@ -58,6 +58,10 @@ docker compose exec -T mysql mysql -uroot -proot123 sep_db < database/seeds.sql
 
 As migrations rodam automaticamente nos containers da aplicacao quando `RUN_MIGRATIONS=true`.
 
+Seeds rodam somente quando `RUN_SEEDS=true`. Em producao, deixe `RUN_SEEDS=false` ou sem configurar, a menos que voce queira popular dados naquele deploy.
+
+Quando `RUN_SEEDS=true`, o runner cria a tabela `_seeds` se ela ainda nao existir e executa apenas arquivos pendentes. O arquivo `database/seeds.sql` e usado como fallback quando nao existir uma pasta `database/seeds` com arquivos `.sql`.
+
 ## Variaveis importantes
 
 ### API ou monolito
@@ -74,6 +78,7 @@ JWT_SECRET=
 CLIENT_URL=
 APP_URL=
 RUN_MIGRATIONS=true
+RUN_SEEDS=false
 LOG_LEVEL=info
 LOG_DIR=/app/logs
 UPLOAD_DIR=/app/uploads
@@ -185,6 +190,9 @@ Como o Railway procura `railway.json` por padrao, os servicos separados precisam
 - O frontend separado usa Caddy para servir SPA com fallback para `index.html`.
 - O container da API nao serve arquivos do React quando `SERVE_CLIENT=false`.
 - Migrations sao seguras para producao: cada arquivo `.sql` roda apenas uma vez.
+- Seeds sao opt-in: so rodam quando `RUN_SEEDS=true`.
+- O runner de seeds cria `_seeds` antes de consultar a tabela, evitando erro quando o banco ainda nao tem esse controle.
+- Para reaplicar um seed, prefira criar um novo arquivo `.sql`; remover manualmente uma linha de `_seeds` deve ser feito com cuidado.
 
 ## Referencias oficiais
 
