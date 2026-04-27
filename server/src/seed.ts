@@ -6,8 +6,8 @@
  * Nunca re-executa automaticamente o mesmo arquivo de seed.
  *
  * Uso:
- *   npm run db:seed              -> ambiente local via ts-node
- *   npm run db:seed:prod         -> produção via node dist/seed.js
+ *   npm run db:seed              -> executa local via ts-node
+ *   npm run db:seed:prod         -> executa produção via node dist/seed.js
  *   npm run db:seed:status       -> lista status local
  *   npm run db:seed:status:prod  -> lista status produção
  */

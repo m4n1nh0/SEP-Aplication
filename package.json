@@ -11,6 +11,7 @@
 
     "db:schema": "docker cp database/schema.sql mysql-local:/schema.sql && docker exec -i mysql-local sh -c \"mysql -u root -proot123 < /schema.sql\"",
     "db:seed:local": "docker cp database/seeds.sql mysql-local:/seeds.sql && docker exec -i mysql-local sh -c \"mysql -u root -proot123 < /seeds.sql\"",
+
     "db:seed": "npm run db:seed:prod --prefix server",
     "db:seed:prod": "npm run db:seed:prod --prefix server",
     "db:seed:status": "npm run db:seed:status --prefix server",
