@@ -1,17 +1,24 @@
 {
   "name": "sep-sistema-v3",
   "version": "3.0.0",
-  "description": "SEP \u2014 Servi\u00e7o Escola de Psicologia | Est\u00e1cio Aracaju",
+  "description": "SEP — Serviço Escola de Psicologia | Estácio Aracaju",
   "private": true,
   "scripts": {
     "dev": "concurrently -n \"API,WEB\" -c \"cyan.bold,magenta.bold\" --kill-others-on-fail \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
     "build": "npm run build --prefix client && npm run build --prefix server",
     "start": "npm run start --prefix server",
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+
     "db:schema": "docker cp database/schema.sql mysql-local:/schema.sql && docker exec -i mysql-local sh -c \"mysql -u root -proot123 < /schema.sql\"",
-    "db:seed": "docker cp database/seeds.sql mysql-local:/seeds.sql && docker exec -i mysql-local sh -c \"mysql -u root -proot123 < /seeds.sql\"",
-    "db:setup": "npm run db:schema && npm run migrate && npm run db:seed",
+    "db:seed:local": "docker cp database/seeds.sql mysql-local:/seeds.sql && docker exec -i mysql-local sh -c \"mysql -u root -proot123 < /seeds.sql\"",
+    "db:seed": "npm run db:seed:prod --prefix server",
+    "db:seed:prod": "npm run db:seed:prod --prefix server",
+    "db:seed:status": "npm run db:seed:status --prefix server",
+    "db:seed:status:prod": "npm run db:seed:status:prod --prefix server",
+
+    "db:setup": "npm run db:schema && npm run migrate && npm run db:seed:local",
     "db:reset": "docker exec mysql-local mysql -u root -proot123 -e \"DROP DATABASE IF EXISTS sep_db\" && npm run db:setup",
+
     "migrate": "npm run migrate --prefix server",
     "migrate:prod": "npm run migrate:prod --prefix server",
     "migrate:status": "npm run migrate:status --prefix server",
