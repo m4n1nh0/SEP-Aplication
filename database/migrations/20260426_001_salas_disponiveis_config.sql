@@ -1,5 +1,3 @@
-USE sep_db;
-
 INSERT IGNORE INTO sep_config (chave, valor, descricao) VALUES
   ('salas_disponiveis', 'Sala 1,Sala 2,Sala 3,Sala 4,Sala 5,Sala Online',
    'Salas disponíveis para agendamento, separadas por vírgula.'),
