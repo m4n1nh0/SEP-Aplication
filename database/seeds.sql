@@ -7,8 +7,6 @@ SET CHARACTER SET utf8mb4;
 -- Rode APÓS o schema: npm run db:seed
 -- ================================================================
 
-USE sep_db;
-
 -- ----------------------------------------------------------------
 -- Senhas (bcrypt hash):
 --   Admin@123  → admin@sep.estacio.br
