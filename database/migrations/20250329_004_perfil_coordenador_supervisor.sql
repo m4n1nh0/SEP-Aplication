@@ -46,24 +46,9 @@ CREATE TABLE IF NOT EXISTS vinculos_supervisor_estagiario (
 
 -- 5. Atualiza campo supervisor nos estagiarios
 --    (vai passar a ser referência ao usuario_id do supervisor)
---    Usa procedimento para compatibilidade com MySQL (IF NOT EXISTS não é suportado em ALTER TABLE)
-DROP PROCEDURE IF EXISTS _sep_add_supervisor_col;
-DELIMITER $
-CREATE PROCEDURE _sep_add_supervisor_col()
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = DATABASE()
-      AND table_name   = 'estagiarios'
-      AND column_name  = 'supervisor_id'
-  ) THEN
-    ALTER TABLE estagiarios ADD COLUMN supervisor_id INT NULL;
-    ALTER TABLE estagiarios ADD CONSTRAINT fk_est_supervisor FOREIGN KEY (supervisor_id) REFERENCES usuarios(id);
-    ALTER TABLE estagiarios ADD INDEX idx_supervisor_id (supervisor_id);
-  END IF;
-END$
-DELIMITER ;
-CALL _sep_add_supervisor_col();
-DROP PROCEDURE IF EXISTS _sep_add_supervisor_col;
+--    Execução direta — a tabela _migrations garante que este arquivo roda apenas uma vez
+ALTER TABLE estagiarios ADD COLUMN supervisor_id INT NULL;
+ALTER TABLE estagiarios ADD CONSTRAINT fk_est_supervisor FOREIGN KEY (supervisor_id) REFERENCES usuarios(id);
+ALTER TABLE estagiarios ADD INDEX idx_supervisor_id (supervisor_id);
 
 -- 6. Configurações de domínios institucionais
