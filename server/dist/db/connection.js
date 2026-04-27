@@ -6,13 +6,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const promise_1 = __importDefault(require("mysql2/promise"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const logger_1 = __importDefault(require("../utils/logger"));
+const mysqlConfig_1 = require("./mysqlConfig");
 dotenv_1.default.config();
 const pool = promise_1.default.createPool({
-    host: process.env.DB_HOST || 'localhost',
-    port: Number(process.env.DB_PORT) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'sep_db',
+    ...(0, mysqlConfig_1.mysqlConnectionConfig)(),
     waitForConnections: true,
     connectionLimit: 15,
     timezone: '-03:00',
@@ -29,8 +26,7 @@ pool.getConnection()
                NOW() AS mysql_now
       `);
         logger_1.default.info('Banco conectado; datas serao lidas como texto local', {
-            host: process.env.DB_HOST || 'localhost',
-            database: process.env.DB_NAME || 'sep_db',
+            ...(0, mysqlConfig_1.mysqlConfigSummary)(),
             timezone_configurada: '-03:00',
             date_strings: true,
             mysql: tzRows?.[0] || null,

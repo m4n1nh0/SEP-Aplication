@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const logger_1 = __importDefault(require("./utils/logger"));
 const rateLimiter_1 = require("./middleware/rateLimiter");
@@ -21,6 +22,9 @@ app.use((0, helmet_1.default)({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            connectSrc: ["'self'"],
             imgSrc: ["'self'", 'data:', 'blob:'],
         },
     },
@@ -47,12 +51,24 @@ app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'SEP API v3'
 app.use('/api', routes_1.default);
 // 404
 app.use('/api/*', (_req, res) => res.status(404).json({ success: false, error: 'Rota não encontrada' }));
+// Frontend compilado para deploy monolitico.
+const clientDist = process.env.CLIENT_DIST_DIR || path_1.default.resolve(__dirname, '../../client/dist');
+const clientIndex = path_1.default.join(clientDist, 'index.html');
+if (process.env.SERVE_CLIENT !== 'false') {
+    app.use(express_1.default.static(clientDist));
+    app.get('*', (_req, res, next) => {
+        if (!fs_1.default.existsSync(clientIndex))
+            return next();
+        res.sendFile(clientIndex);
+    });
+}
 app.listen(PORT, () => {
     logger_1.default.info('SEP API v3 iniciado', {
         url: `http://localhost:${PORT}/api`,
         env: process.env.NODE_ENV || 'development',
         uploads: process.env.UPLOAD_DIR || './uploads',
         cors: process.env.CLIENT_URL || 'http://localhost:5173',
+        client_dist: process.env.SERVE_CLIENT === 'false' ? 'desabilitado' : clientDist,
     });
 });
 exports.default = app;

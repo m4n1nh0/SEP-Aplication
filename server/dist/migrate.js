@@ -17,15 +17,22 @@ const promise_1 = __importDefault(require("mysql2/promise"));
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const dotenv_1 = __importDefault(require("dotenv"));
+const mysqlConfig_1 = require("./db/mysqlConfig");
 dotenv_1.default.config();
-const MIGRATIONS_DIR = path_1.default.join(__dirname, '../database/migrations');
+function resolveMigrationsDir() {
+    const candidates = [
+        process.env.MIGRATIONS_DIR,
+        path_1.default.resolve(process.cwd(), 'database/migrations'),
+        path_1.default.resolve(process.cwd(), '../database/migrations'),
+        path_1.default.resolve(__dirname, '../../database/migrations'),
+        path_1.default.resolve(__dirname, '../database/migrations'),
+    ].filter(Boolean);
+    return candidates.find(dir => fs_1.default.existsSync(dir)) || candidates[0];
+}
+const MIGRATIONS_DIR = resolveMigrationsDir();
 async function getConnection() {
     return promise_1.default.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        port: Number(process.env.DB_PORT) || 3306,
-        user: process.env.DB_USER || 'root',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'sep_db',
+        ...(0, mysqlConfig_1.mysqlConnectionConfig)(),
         charset: 'utf8mb4',
         multipleStatements: true, // necessário para executar múltiplos statements por arquivo
     });
@@ -76,6 +83,7 @@ async function aplicar(conn, arquivo) {
 async function migrate() {
     const conn = await getConnection();
     try {
+        console.log('Conectando no MySQL:', (0, mysqlConfig_1.mysqlConfigSummary)());
         await ensureMigrationsTable(conn);
         const aplicadas = await getAplicadas(conn);
         const arquivos = getMigrationFiles();

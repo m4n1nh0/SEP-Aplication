@@ -124,7 +124,16 @@ const serializeError = (err) => {
     if (!err)
         return {};
     if (err instanceof Error) {
-        return { message: err.message, stack: err.stack, name: err.name, ...err.code ? { code: err.code } : {} };
+        const code = err.code;
+        const nested = Array.isArray(err.errors)
+            ? { errors: err.errors.slice(0, 3).map((e) => ({
+                    message: e?.message || e?.code || e?.name || String(e),
+                    code: e?.code,
+                    address: e?.address,
+                    port: e?.port,
+                })) }
+            : {};
+        return { message: err.message || code || err.name, stack: err.stack, name: err.name, ...(code ? { code } : {}), ...nested };
     }
     return { raw: String(err) };
 };
