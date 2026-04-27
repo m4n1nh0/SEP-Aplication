@@ -1,14 +1,27 @@
-FROM node:20-alpine AS deps
+FROM node:20-alpine AS server-deps
 
 WORKDIR /app
 
 COPY server/package*.json server/
 RUN npm ci --prefix server
 
-FROM deps AS build
+FROM server-deps AS server-build
 
 COPY server server
 RUN npm run build --prefix server
+
+FROM node:20-alpine AS client-build
+
+WORKDIR /app
+
+COPY client/package*.json client/
+RUN npm ci --prefix client
+
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=${VITE_API_URL}
+
+COPY client client
+RUN npm run build --prefix client
 
 FROM node:20-alpine AS runtime
 
@@ -16,7 +29,8 @@ WORKDIR /app
 
 ENV NODE_ENV=production \
     PORT=3001 \
-    SERVE_CLIENT=false \
+    SERVE_CLIENT=true \
+    CLIENT_DIST_DIR=/app/client/dist \
     LOG_DIR=/app/logs \
     UPLOAD_DIR=/app/uploads
 
@@ -24,7 +38,8 @@ COPY server/package*.json server/
 RUN npm ci --omit=dev --prefix server \
   && npm cache clean --force
 
-COPY --from=build /app/server/dist server/dist
+COPY --from=server-build /app/server/dist server/dist
+COPY --from=client-build /app/client/dist client/dist
 COPY database database
 COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 

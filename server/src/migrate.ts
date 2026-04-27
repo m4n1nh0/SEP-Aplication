@@ -26,7 +26,13 @@ function resolveMigrationsDir() {
     path.resolve(__dirname, '../database/migrations'),
   ].filter(Boolean) as string[];
 
-  return candidates.find(dir => fs.existsSync(dir)) || candidates[0];
+  const withSql = candidates.find(dir =>
+    fs.existsSync(dir) &&
+    fs.statSync(dir).isDirectory() &&
+    fs.readdirSync(dir).some(file => file.endsWith('.sql'))
+  );
+
+  return withSql || candidates.find(dir => fs.existsSync(dir)) || candidates[0];
 }
 
 const MIGRATIONS_DIR = resolveMigrationsDir();

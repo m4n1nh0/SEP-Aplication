@@ -27,7 +27,10 @@ function resolveMigrationsDir() {
         path_1.default.resolve(__dirname, '../../database/migrations'),
         path_1.default.resolve(__dirname, '../database/migrations'),
     ].filter(Boolean);
-    return candidates.find(dir => fs_1.default.existsSync(dir)) || candidates[0];
+    const withSql = candidates.find(dir => fs_1.default.existsSync(dir) &&
+        fs_1.default.statSync(dir).isDirectory() &&
+        fs_1.default.readdirSync(dir).some(file => file.endsWith('.sql')));
+    return withSql || candidates.find(dir => fs_1.default.existsSync(dir)) || candidates[0];
 }
 const MIGRATIONS_DIR = resolveMigrationsDir();
 async function getConnection() {

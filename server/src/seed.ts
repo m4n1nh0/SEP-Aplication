@@ -35,24 +35,40 @@ function singleSeedFile(filePath?: string): SeedFile[] {
   return [{ arquivo: path.basename(filePath), filePath }];
 }
 
+function firstExistingSeedFile(files: string[]): SeedFile[] {
+  for (const file of files) {
+    const seed = singleSeedFile(file);
+    if (seed.length > 0) return seed;
+  }
+
+  return [];
+}
+
+function firstSeedDirFiles(dirs: string[]): SeedFile[] {
+  for (const dir of dirs) {
+    const files = listSqlFiles(dir);
+    if (files.length > 0) return files;
+  }
+
+  return [];
+}
+
+function uniqueSeedFiles(files: SeedFile[]): SeedFile[] {
+  const seen = new Set<string>();
+
+  return files.filter((file) => {
+    if (seen.has(file.arquivo)) return false;
+    seen.add(file.arquivo);
+    return true;
+  });
+}
+
 function resolveSeedFiles(): SeedFile[] {
   const explicitFile = singleSeedFile(process.env.SEEDS_FILE);
   if (explicitFile.length > 0) return explicitFile;
 
   const explicitDir = process.env.SEEDS_DIR ? listSqlFiles(process.env.SEEDS_DIR) : [];
   if (explicitDir.length > 0) return explicitDir;
-
-  const seedDirs = [
-    path.resolve(process.cwd(), "database/seeds"),
-    path.resolve(process.cwd(), "server/database/seeds"),
-    path.resolve(__dirname, "../../database/seeds"),
-    path.resolve(__dirname, "../database/seeds"),
-  ];
-
-  for (const dir of seedDirs) {
-    const files = listSqlFiles(dir);
-    if (files.length > 0) return files;
-  }
 
   const seedFiles = [
     path.resolve(process.cwd(), "database/seeds.sql"),
@@ -61,12 +77,17 @@ function resolveSeedFiles(): SeedFile[] {
     path.resolve(__dirname, "../database/seeds.sql"),
   ];
 
-  for (const file of seedFiles) {
-    const files = singleSeedFile(file);
-    if (files.length > 0) return files;
-  }
+  const seedDirs = [
+    path.resolve(process.cwd(), "database/seeds"),
+    path.resolve(process.cwd(), "server/database/seeds"),
+    path.resolve(__dirname, "../../database/seeds"),
+    path.resolve(__dirname, "../database/seeds"),
+  ];
 
-  return [];
+  return uniqueSeedFiles([
+    ...firstExistingSeedFile(seedFiles),
+    ...firstSeedDirFiles(seedDirs),
+  ]);
 }
 
 const SEED_FILES = resolveSeedFiles();

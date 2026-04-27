@@ -23,6 +23,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      SERVE_CLIENT: "true"
+      CLIENT_DIST_DIR: /app/client/dist
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: root

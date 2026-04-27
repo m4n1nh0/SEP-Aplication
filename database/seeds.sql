@@ -5,6 +5,7 @@ SET CHARACTER SET utf8mb4;
 -- SEP Sistema v3 — Estácio Aracaju
 -- seeds.sql — APENAS DADOS DE DEMONSTRAÇÃO
 -- Rode APÓS o schema: npm run db:seed
+-- Seeds incrementais ficam em database/seeds/*.sql e tambem sao aplicados pelo runner.
 -- ================================================================
 
 -- ----------------------------------------------------------------

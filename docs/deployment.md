@@ -60,7 +60,7 @@ As migrations rodam automaticamente nos containers da aplicacao quando `RUN_MIGR
 
 Seeds rodam somente quando `RUN_SEEDS=true`. Em producao, deixe `RUN_SEEDS=false` ou sem configurar, a menos que voce queira popular dados naquele deploy.
 
-Quando `RUN_SEEDS=true`, o runner cria a tabela `_seeds` se ela ainda nao existir e executa apenas arquivos pendentes. O arquivo `database/seeds.sql` e usado como fallback quando nao existir uma pasta `database/seeds` com arquivos `.sql`.
+Quando `RUN_SEEDS=true`, o runner cria a tabela `_seeds` se ela ainda nao existir e executa apenas arquivos pendentes. Por padrao, ele aplica primeiro `database/seeds.sql` e depois os incrementais em `database/seeds/*.sql`.
 
 ## Variaveis importantes
 
